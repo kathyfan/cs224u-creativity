@@ -59,7 +59,9 @@ def train(model, iterator, optimizer, criterion):
 
     return epoch_loss / len(iterator), epoch_corr / len(iterator)
 
-def evaluate(model, iterator, criterion):
+# Evaluate the model on a validation or test set.
+# Use debug=True to print more detailed info.
+def evaluate(model, iterator, criterion, debug=False):
     epoch_loss = 0
     epoch_corr = 0
 
@@ -71,8 +73,9 @@ def evaluate(model, iterator, criterion):
             # print(i)
             # i += 1
             predictions = model(batch.text).squeeze(1)
-            # print(predictions) # uncomment to see how the predictions look compared to labels
-            # print(batch.label)
+            if debug:
+                print('predictions: {}'.format(predictions)) 
+                print('true labels: {}'.format(batch.label))
             loss = criterion(predictions, batch.label)
             corr = np.corrcoef(batch.label.cpu().data, predictions.cpu().data)
             epoch_loss += loss.item()
