@@ -6,9 +6,7 @@ import torch.nn as nn
 class BERTLinear(nn.Module):
   def __init__(self,
                bert,
-               hidden_dim,
                output_dim,
-               n_layers,
                dropout):
     super().__init__()
     self.bert = bert

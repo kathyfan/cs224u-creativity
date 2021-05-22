@@ -1,3 +1,5 @@
+import numpy as np
+import torch
 from torchtext.legacy import data 
 
 # Get train and validation iterators.
@@ -27,3 +29,60 @@ def get_iterator(test_data, batch_size, device):
         sort_key = lambda x: len(x.text),
         sort_within_batch = False,
     )
+
+def train(model, iterator, optimizer, criterion):
+    epoch_loss = 0
+    epoch_corr = 0
+  
+    model.train() # Put model in training mode.
+
+    for batch in iterator:
+        optimizer.zero_grad()
+        predictions = model(batch.text).squeeze(1)
+        loss = criterion(predictions, batch.label)
+        # need to use detach() since `predictions` requires gradient
+        # alternative: scipy.stats.pearsonr? (might be more memory efficient,
+        # but not sure which one is more efficient to compute)
+        corr = np.corrcoef(batch.label.cpu().data.numpy(), predictions.detach().cpu().data.numpy())
+        loss.backward()
+        optimizer.step()
+
+        epoch_loss += loss.item()
+        # corr is a (2,2) matrix, so we just get the top right element.
+        # If the correlation is a nan value, replace with 0, which means
+        # no correlation.
+        corr_value = corr[0][1].item()
+        if np.isnan(corr[0][1]):
+            corr_value = 0
+
+        epoch_corr += corr_value
+
+    return epoch_loss / len(iterator), epoch_corr / len(iterator)
+
+def evaluate(model, iterator, criterion):
+    epoch_loss = 0
+    epoch_corr = 0
+
+    model.eval()
+
+    # i = 0
+    with torch.no_grad():
+        for batch in iterator:
+            # print(i)
+            # i += 1
+            predictions = model(batch.text).squeeze(1)
+            # print(predictions) # uncomment to see how the predictions look compared to labels
+            # print(batch.label)
+            loss = criterion(predictions, batch.label)
+            corr = np.corrcoef(batch.label.cpu().data, predictions.cpu().data)
+            epoch_loss += loss.item()
+
+            # If the correlation is a nan value, replace with 0, which means
+            # no correlation.
+            corr_value = corr[0][1].item()
+            if np.isnan(corr[0][1]):
+                corr_value = 0
+
+        epoch_corr += corr_value
+
+    return epoch_loss / len(iterator), epoch_corr / len(iterator)
