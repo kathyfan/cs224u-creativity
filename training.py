@@ -77,7 +77,7 @@ def evaluate(model, iterator, criterion, debug=False):
                 print('predictions: {}'.format(predictions)) 
                 print('true labels: {}'.format(batch.label))
             loss = criterion(predictions, batch.label)
-            corr = np.corrcoef(batch.label.cpu().data, predictions.cpu().data)
+            corr = np.corrcoef(batch.label.cpu().data.numpy(), predictions.cpu().data.numpy())
             epoch_loss += loss.item()
 
             # If the correlation is a nan value, replace with 0, which means
@@ -86,6 +86,6 @@ def evaluate(model, iterator, criterion, debug=False):
             if np.isnan(corr[0][1]):
                 corr_value = 0
 
-        epoch_corr += corr_value
+            epoch_corr += corr_value
 
     return epoch_loss / len(iterator), epoch_corr / len(iterator)
