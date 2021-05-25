@@ -5,6 +5,9 @@ Course project for CS224U
 Project members: Zi Ying (Kathy) Fan, Xubo Cao
 
 # Dev Guide
+## Troubleshooting
+GPU run out of memory: run `nvidia-smi` to get the PID of the current job, and run `sudo kill -9 {PID}` to clear it.
+
 ## GCP
 ### Specs/How-to
 Project name: cs224u-creativity
