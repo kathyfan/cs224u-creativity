@@ -8,6 +8,9 @@ Project members: Zi Ying (Kathy) Fan, Xubo Cao
 ## Troubleshooting
 GPU run out of memory: run `nvidia-smi` to get the PID of the current job, and run `sudo kill -9 {PID}` to clear it.
 
+## Git
+My regular flow is to run `git pull` to grab any updates, `git status` to check which files are locally modified, `git add {FILE} {FILE}` to add changes to a commit, `git commit -m "YOUR DESCRIPTION HERE"` to create the commit, and then `git push`. If you want to discard local changes completely (irreversible), you can run `git checkout -f {FILE}`. (The -f option is force).
+
 ## GCP
 ### Specs/How-to
 Project name: cs224u-creativity
