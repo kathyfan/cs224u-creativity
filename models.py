@@ -30,3 +30,43 @@ class BERTLinear(nn.Module):
     pooled_output = self.dropout(pooled_output) # [4, 768] = (bs, dim)
     output = self.classifier(pooled_output) # [4, 1] = (bs, output_dim)
     return output
+
+# This class uses a RNN classifier on top of BERT embeddings.
+class BERTRNN(nn.Module):
+  def __init__(self,
+               bert,
+               output_dim,
+               hidden_dim,
+               num_layers,
+               bidirectional,
+               dropout):
+    super().__init__()
+    self.bert = bert
+    dim = bert.config.to_dict()['dim'] # embedding dim of BERT
+    self.rnn = nn.LSTM(
+            input_size=dim,
+            hidden_size=hidden_dim,
+            num_layers = num_layers,
+            bidirectional = bidirectional,
+            batch_first=True)
+    self.pre_classifier = nn.Linear(hidden_dim * 2 if bidirectional else hidden_dim, hidden_dim * 2 if bidirectional else hidden_dim)
+    self.dropout = nn.Dropout(dropout)
+    self.classifier = nn.Linear(hidden_dim * 2 if bidirectional else hidden_dim, output_dim)
+
+  def forward(self, text):
+    # forward pass of bert; then take the output of CLS token
+    embedded = self.bert(text)[0] # [4, 425, 768] = (bs, seq_len, dim)
+    # pooled_output = embedded[:,0] # [4, 768] = (bs, dim)
+    _, hidden = self.rnn(embedded) # (n_layers * n_directions, bs, hidden_dim)
+    hidden = hidden[0] # self.rnn returns both hidden state and cell state
+    # take the final outputs to pass to the next layer of classifier
+    # resulting size: (bs, hidden_dim)
+    if self.rnn.bidirectional:
+      hidden = torch.cat((hidden[-2,:,:], hidden[-1,:,:]), dim = 1)
+    else:
+      hidden = hidden[-1,:,:] 
+    pooled_output = self.pre_classifier(hidden) # [4, h] = (bs, hidden_dim)
+    pooled_output = nn.ReLU()(pooled_output) # [4, h] = (bs, hidden_dim)
+    pooled_output = self.dropout(pooled_output) # [4, h] = (bs, hidden_dim)
+    output = self.classifier(pooled_output) # [4, 1] = (bs, output_dim)
+    return output
