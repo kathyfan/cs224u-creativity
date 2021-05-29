@@ -1,3 +1,4 @@
+import torch
 import torch.nn as nn
 
 # This class adds some linear layers on top of BERT.
