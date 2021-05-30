@@ -1,6 +1,13 @@
+import constants # constants.py
+import models # models.py
+import utils # utils.py
 import numpy as np
 import torch
+import torch.optim as optim
 from torchtext.legacy import data 
+from transformers import DistilBertModel
+from sklearn.model_selection import KFold, ParameterGrid
+
 
 # Get train and validation iterators.
 # Given train and validation datasets, returns 2 iterators.
@@ -29,66 +36,6 @@ def get_iterator(test_data, batch_size, device):
         sort_key = lambda x: len(x.text),
         sort_within_batch = False,
     )
-
-# def train(model, iterator, optimizer, criterion):
-#     epoch_loss = 0
-#     epoch_corr = 0
-  
-#     model.train() # Put model in training mode.
-
-#     for batch in iterator:
-#         optimizer.zero_grad()
-#         predictions = model(batch.text).squeeze(1)
-#         loss = criterion(predictions, batch.label)
-#         # need to use detach() since `predictions` requires gradient
-#         # alternative: scipy.stats.pearsonr? (might be more memory efficient,
-#         # but not sure which one is more efficient to compute)
-#         corr = np.corrcoef(batch.label.cpu().data.numpy(), predictions.detach().cpu().data.numpy())
-#         loss.backward()
-#         optimizer.step()
-
-#         epoch_loss += loss.item()
-#         # corr is a (2,2) matrix, so we just get the top right element.
-#         # If the correlation is a nan value, replace with 0, which means
-#         # no correlation.
-#         corr_value = corr[0][1].item()
-#         if np.isnan(corr[0][1]):
-#             corr_value = 0
-
-#         epoch_corr += corr_value
-
-#     return epoch_loss / len(iterator), epoch_corr / len(iterator)
-
-# # Evaluate the model on a validation or test set.
-# # Use debug=True to print more detailed info.
-# def evaluate(model, iterator, criterion, debug=False):
-#     epoch_loss = 0
-#     epoch_corr = 0
-
-#     model.eval()
-
-#     # i = 0
-#     with torch.no_grad():
-#         for batch in iterator:
-#             # print(i)
-#             # i += 1
-#             predictions = model(batch.text).squeeze(1)
-#             if debug:
-#                 print('predictions: {}'.format(predictions)) 
-#                 print('true labels: {}'.format(batch.label))
-#             loss = criterion(predictions, batch.label)
-#             corr = np.corrcoef(batch.label.cpu().data.numpy(), predictions.cpu().data.numpy())
-#             epoch_loss += loss.item()
-
-#             # If the correlation is a nan value, replace with 0, which means
-#             # no correlation.
-#             corr_value = corr[0][1].item()
-#             if np.isnan(corr[0][1]):
-#                 corr_value = 0
-
-#             epoch_corr += corr_value
-
-#     return epoch_loss / len(iterator), epoch_corr / len(iterator)
 
 def train(model, iterator, optimizer, criterion, added_features = None):
     epoch_loss = 0
@@ -150,3 +97,99 @@ def evaluate(model, iterator, criterion, debug=False, added_features = None):
             corr_value = 0
 
     return epoch_loss / len(iterator), corr_value
+
+# This function evaluates a model with a certain set of parameters
+# Returns validation correlations (list with a score for each split)
+def launch_experiment(train_data_df, dropout, added_features, lr, batch_size, n_epoch, n_splits):
+    valid_corrs = np.empty(n_splits)
+    added_dim = 0
+    if added_features is not None:
+        added_dim = added_features.shape[1]
+        added_features = added_features.to(device)
+    kf = KFold(n_splits=n_splits)
+    fold = 0
+    
+    for train_index, valid_index in kf.split(train_data_df):
+        print('training on fold {}'.format(fold))
+        train_data = data.Dataset(train_exs_arr[train_index], all_fields)
+        valid_data = data.Dataset(train_exs_arr[valid_index], all_fields)
+    
+        # Initialize a new model each fold.
+        # https://ai.stackexchange.com/questions/18221/deep-learning-with-kfold-cross-validation-with-epochs
+        # https://stats.stackexchange.com/questions/358380/neural-networks-epochs-with-10-fold-cross-validation-doing-something-wrong
+        bert = DistilBertModel.from_pretrained(constants.WEIGHTS_NAME)
+        model = models.BERTLinear(bert,
+                                  constants.OUTPUT_DIM,
+                                  dropout,
+                                  added_dim = added_dim)
+        optimizer = optim.Adam(model.parameters(),lr=lr,betas=(0.9, 0.999),eps=1e-08)
+        model = model.to(device)
+
+        train_iterator, valid_iterator = get_iterators(train_data, valid_data, batch_size, device)
+
+        for epoch in range(n_epoch):
+            start_time = time.time()
+            train_loss, train_corr = train(model, train_iterator, optimizer, criterion, added_features = added_features)
+            valid_loss, valid_corr = evaluate(model, valid_iterator, criterion, debug=False,added_features = added_features)
+            end_time = time.time()
+            epoch_mins, epoch_secs = utils.epoch_time(start_time, end_time)
+
+
+            print(f'Epoch: {epoch:02} | Epoch Time: {epoch_mins}m {epoch_secs}s')
+            print(f'\t Train Loss: {train_loss:.3f} | Train Corr: {train_corr:.2f}')
+            print(f'\t Val. Loss: {valid_loss:.3f} |  Val. Corr: {valid_corr:.2f}')
+    
+        valid_corrs[fold] = valid_corr
+        fold += 1
+    return valid_corrs
+
+# Takes a parameter grid and search for the best model using all combinations of parameters
+# The param_grid is a dictionary like the input for sklearn.model_selection.GridSearchCV
+# Example: {'batch_size': [1,8], 'lr': [5e-05, 1e-05]}
+# Each model will be evaluated using k-fold (default = 5) cross validations
+# The model with the highest average correlations across all folds will be selected as the best model
+# The function returns the performance of all models (k-element lists stored in dictionaries)
+# These results can be used for model comparison (e.g., Wilcoxin test)
+# and the best model (a tuple with the parameters and the average correlation)
+def perform_hyperparameter_search(param_grid, cv = constants.N_SPLITS):
+    
+    # Set default arguments. If the argument is not given in the parameter grid, the default will be used
+    default = {'dropout': [.2], 
+              'batch_size': [8],
+               'lr': [5e-05],
+              'added_features': [None],
+              'n_epoch': [3]}
+    for argum in default:
+        if argum not in param_grid:
+            param_grid[argum] = default[argum]
+    
+    # Use this function to expand the parameter grid
+    grid = ParameterGrid(param_grid)
+    
+    # Place holder for model performance
+    results = {}
+    results_mean = {}
+    
+    for params in grid:
+        print(params)
+        # Index of the model, represents the parameters
+        index = '; '.join(x + '_' + str(y) for x, y in params.items())
+        
+        # Launch an experiment using the current set of parameters
+        result = launch_experiment(train_data_df = train_exs_arr,
+                                     n_splits = cv,
+                                     dropout = params['dropout'],
+                                     added_features = params['added_features'],
+                                     lr = params['lr'],
+                                     batch_size = params['batch_size'],
+                                     n_epoch = params['n_epoch'])
+        
+        # Store the correlation results
+        results[index] = result
+        results_mean[index] = np.mean(result)
+    
+    # Select the best results
+    best_index = max(results_mean, key = results_mean.get)
+    best_model = (best_index,results_mean[best_index])
+
+    return results, best_model
