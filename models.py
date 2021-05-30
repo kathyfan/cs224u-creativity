@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-# This class adds some linear layers on top of BERT.
+# This class adds some linear layers on top of BERT and supports added features.
 # It is meant to mimic the HappyTransformer implementation at 
 # https://huggingface.co/transformers/_modules/transformers/models/distilbert/modeling_distilbert.html#DistilBertForSequenceClassification
 class BERTLinear(nn.Module):
@@ -25,7 +25,7 @@ class BERTLinear(nn.Module):
     # ex our final layers -- we might need to write a _init_weights?
     # self.init_weights() 
 
-  def forward(self, text, added_features = None):
+  def forward(self, text, added_features=None):
     # forward pass of bert; then take the output of CLS token
     embedded = self.bert(text)[0] # [4, 425, 768] = (bs, seq_len, dim)
     pooled_output = embedded[:,0] # [4, 768] = (bs, dim)
@@ -39,6 +39,7 @@ class BERTLinear(nn.Module):
     return output
 
 # This class uses a RNN classifier on top of BERT embeddings.
+# TODO: support added features.
 class BERTRNN(nn.Module):
   def __init__(self,
                bert,
