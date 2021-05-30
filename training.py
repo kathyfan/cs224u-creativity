@@ -37,7 +37,7 @@ def get_iterator(test_data, batch_size, device):
         sort_within_batch = False,
     )
 
-def train(model, iterator, optimizer, criterion, added_features = None):
+def train(model, iterator, optimizer, criterion, added_feature=None):
     epoch_loss = 0
     epoch_pred = []
     epoch_true = []
@@ -46,7 +46,7 @@ def train(model, iterator, optimizer, criterion, added_features = None):
 
     for batch in iterator:
         optimizer.zero_grad()
-        predictions = model(batch.text,added_features).squeeze(1)
+        predictions = model(batch.text,added_feature).squeeze(1)
         loss = criterion(predictions, batch.label)
         # need to use detach() since `predictions` requires gradient
         # alternative: scipy.stats.pearsonr? (might be more memory efficient,
@@ -67,7 +67,7 @@ def train(model, iterator, optimizer, criterion, added_features = None):
 
 # Evaluate the model on a validation or test set.
 # Use debug=True to print more detailed info.
-def evaluate(model, iterator, criterion, debug=False, added_features = None):
+def evaluate(model, iterator, criterion, debug=False, added_feature=None):
     epoch_loss = 0
 
     model.eval()
@@ -79,7 +79,7 @@ def evaluate(model, iterator, criterion, debug=False, added_features = None):
         for batch in iterator:
             # print(i)
             # i += 1
-            predictions = model(batch.text,added_features).squeeze(1)
+            predictions = model(batch.text,added_feature).squeeze(1)
             if debug:
                 print('predictions: {}'.format(predictions)) 
                 print('true labels: {}'.format(batch.label))
@@ -100,12 +100,12 @@ def evaluate(model, iterator, criterion, debug=False, added_features = None):
 
 # This function evaluates a model with a certain set of parameters
 # Returns validation correlations (list with a score for each split)
-def launch_experiment(train_data_df, dropout, added_features, lr, batch_size, n_epoch, n_splits):
+def launch_experiment(train_data_df, n_splits, params, added_feature):
     valid_corrs = np.empty(n_splits)
     added_dim = 0
-    if added_features is not None:
-        added_dim = added_features.shape[1]
-        added_features = added_features.to(device)
+    if added_feature is not None:
+        added_dim = added_feature.shape[1]
+        added_features = added_feature.to(device)
     kf = KFold(n_splits=n_splits)
     fold = 0
     
@@ -120,17 +120,17 @@ def launch_experiment(train_data_df, dropout, added_features, lr, batch_size, n_
         bert = DistilBertModel.from_pretrained(constants.WEIGHTS_NAME)
         model = models.BERTLinear(bert,
                                   constants.OUTPUT_DIM,
-                                  dropout,
+                                  params['dropout'],
                                   added_dim = added_dim)
-        optimizer = optim.Adam(model.parameters(),lr=lr,betas=(0.9, 0.999),eps=1e-08)
+        optimizer = optim.Adam(model.parameters(),lr=params['lr'],betas=(0.9, 0.999),eps=1e-08)
         model = model.to(device)
 
-        train_iterator, valid_iterator = get_iterators(train_data, valid_data, batch_size, device)
+        train_iterator, valid_iterator = get_iterators(train_data, valid_data, params['batch_size'], device)
 
-        for epoch in range(n_epoch):
+        for epoch in range(params['n_epoch']):
             start_time = time.time()
-            train_loss, train_corr = train(model, train_iterator, optimizer, criterion, added_features = added_features)
-            valid_loss, valid_corr = evaluate(model, valid_iterator, criterion, debug=False,added_features = added_features)
+            train_loss, train_corr = train(model, train_iterator, optimizer, criterion, added_feature=added_feature)
+            valid_loss, valid_corr = evaluate(model, valid_iterator, criterion, added_feature=added_feature)
             end_time = time.time()
             epoch_mins, epoch_secs = utils.epoch_time(start_time, end_time)
 
@@ -151,13 +151,12 @@ def launch_experiment(train_data_df, dropout, added_features, lr, batch_size, n_
 # The function returns the performance of all models (k-element lists stored in dictionaries)
 # These results can be used for model comparison (e.g., Wilcoxin test)
 # and the best model (a tuple with the parameters and the average correlation)
-def perform_hyperparameter_search(param_grid, cv = constants.N_SPLITS):
+def perform_hyperparameter_search(param_grid, added_feature=None, cv=constants.N_SPLITS):
     
     # Set default arguments. If the argument is not given in the parameter grid, the default will be used
     default = {'dropout': [.2], 
               'batch_size': [8],
                'lr': [5e-05],
-              'added_features': [None],
               'n_epoch': [3]}
     for argum in default:
         if argum not in param_grid:
@@ -177,12 +176,9 @@ def perform_hyperparameter_search(param_grid, cv = constants.N_SPLITS):
         
         # Launch an experiment using the current set of parameters
         result = launch_experiment(train_data_df = train_exs_arr,
-                                     n_splits = cv,
-                                     dropout = params['dropout'],
-                                     added_features = params['added_features'],
-                                     lr = params['lr'],
-                                     batch_size = params['batch_size'],
-                                     n_epoch = params['n_epoch'])
+                                   n_splits = cv,
+                                   params,
+                                   added_feature)
         
         # Store the correlation results
         results[index] = result
