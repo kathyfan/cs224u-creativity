@@ -100,8 +100,12 @@ def evaluate(model, iterator, criterion, debug=False, added_feature=None):
 
 # This function evaluates a model with a certain set of parameters
 # Returns validation correlations (list with a score for each split)
-def launch_experiment(train_data_df, n_splits, params, added_feature):
+# Optionally saves the weights of the best model from this experiment.
+def launch_experiment(eid, train_data_df, n_splits, params, added_feature, save_weights=False):
     valid_corrs = np.empty(n_splits)
+    best_valid_loss = float('inf') 
+    filename = eid + "_best_valid_loss.pt"
+    
     added_dim = 0
     if added_feature is not None:
         added_dim = added_feature.shape[1]
@@ -133,7 +137,13 @@ def launch_experiment(train_data_df, n_splits, params, added_feature):
             valid_loss, valid_corr = evaluate(model, valid_iterator, criterion, added_feature=added_feature)
             end_time = time.time()
             epoch_mins, epoch_secs = utils.epoch_time(start_time, end_time)
-
+            
+            if save_weights:
+                if valid_loss < best_valid_loss:
+                best_valid_loss = valid_loss
+                # Save the weights of the model with the best valid loss
+                print('updating saved weights of best model')
+                torch.save(model.state_dict(), filename)
 
             print(f'Epoch: {epoch:02} | Epoch Time: {epoch_mins}m {epoch_secs}s')
             print(f'\t Train Loss: {train_loss:.3f} | Train Corr: {train_corr:.2f}')
@@ -169,16 +179,19 @@ def perform_hyperparameter_search(param_grid, added_feature=None, cv=constants.N
     results = {}
     results_mean = {}
     
+    eid = 0 # experiment id
     for params in grid:
         print(params)
         # Index of the model, represents the parameters
         index = '; '.join(x + '_' + str(y) for x, y in params.items())
         
         # Launch an experiment using the current set of parameters
-        result = launch_experiment(train_data_df = train_exs_arr,
-                                   n_splits = cv,
+        result = launch_experiment(eid,
+                                   train_data_df=train_exs_arr,
+                                   n_splits=cv,
                                    params,
                                    added_feature)
+        eid += 1
         
         # Store the correlation results
         results[index] = result
