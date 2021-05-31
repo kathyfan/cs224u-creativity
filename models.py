@@ -61,7 +61,7 @@ class BERTRNN(nn.Module):
     self.dropout = nn.Dropout(dropout)
     self.classifier = nn.Linear(hidden_dim * 2 if bidirectional else hidden_dim, output_dim)
 
-  def forward(self, text):
+  def forward(self, text, added_features=None):
     # forward pass of bert; then take the output of CLS token
     embedded = self.bert(text)[0] # [4, 425, 768] = (bs, seq_len, dim)
     # pooled_output = embedded[:,0] # [4, 768] = (bs, dim)

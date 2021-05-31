@@ -1,6 +1,7 @@
 import constants # constants.py
 import models # models.py
 import dataset # dataset.py
+import utils # utils.py
 import numpy as np
 import time
 import torch
@@ -102,8 +103,9 @@ def evaluate(model, iterator, criterion, debug=False, added_feature=None):
 
 # This function evaluates a model with a certain set of parameters
 # Returns validation correlations (list with a score for each split)
+# Use `rnn` to toggle between BERTLinear and BERTRNN.
 # Optionally saves the weights of the best model from this experiment.
-def launch_experiment(eid, train_array, n_splits, params, added_feature=None, save_weights=False, early_stop=True):
+def launch_experiment(eid, train_array, params, added_feature=None, rnn=False, save_weights=False, early_stop=True, n_splits=constants.N_SPLITS):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     criterion = nn.MSELoss(size_average=False)
     criterion = criterion.to(device)
@@ -129,10 +131,18 @@ def launch_experiment(eid, train_array, n_splits, params, added_feature=None, sa
         # https://ai.stackexchange.com/questions/18221/deep-learning-with-kfold-cross-validation-with-epochs
         # https://stats.stackexchange.com/questions/358380/neural-networks-epochs-with-10-fold-cross-validation-doing-something-wrong
         bert = DistilBertModel.from_pretrained(constants.WEIGHTS_NAME)
-        model = models.BERTLinear(bert,
-                                  constants.OUTPUT_DIM,
-                                  params['dropout'],
-                                  added_dim = added_dim)
+        if rnn:
+            model = models.BERTRNN(bert,
+                                   constants.OUTPUT_DIM,
+                                   params['hidden_dim'],
+                                   params['num_layers'],
+                                   params['bidirectional'],
+                                   params['dropout'])
+        else:
+            model = models.BERTLinear(bert,
+                                      constants.OUTPUT_DIM,
+                                      params['dropout'],
+                                      added_dim = added_dim)
         optimizer = optim.Adam(model.parameters(),lr=params['lr'],betas=(0.9, 0.999),eps=1e-08)
         model = model.to(device)
 
@@ -161,7 +171,7 @@ def launch_experiment(eid, train_array, n_splits, params, added_feature=None, sa
                 # or, validation correlation less than train correlation by more than 0.3.
                 # the second criteria suggests the gap is large between train/valid results
                 # meaning we could be overfitting if we continue.
-                if loss_delta / prev_train_loss < 0.1 || train_corr - valid_corr > 0.3:
+                if loss_delta / prev_train_loss < 0.1 or train_corr - valid_corr > 0.3:
                     # no need to update prev_train_loss since we are jumping out of loop
                     break
             
@@ -185,13 +195,17 @@ def launch_experiment(eid, train_array, n_splits, params, added_feature=None, sa
 # The function returns the performance of all models (k-element lists stored in dictionaries)
 # These results can be used for model comparison (e.g., Wilcoxin test)
 # and the best model (a tuple with the parameters and the average correlation)
-def perform_hyperparameter_search(param_grid, train_array, added_feature=None, early_stop=True, cv=constants.N_SPLITS):
+def perform_hyperparameter_search(param_grid, train_array, rnn=False, added_feature=None, save_weights=False, early_stop=True, n_splits=constants.N_SPLITS):
     
     # Set default arguments. If the argument is not given in the parameter grid, the default will be used
     default = {'dropout': [.2], 
               'batch_size': [8],
-               'lr': [5e-05],
+              'lr': [5e-05],
               'max_epochs': [3]}
+    if rnn:
+        default['hidden_dim'] = 256
+        default['num_layers'] = 1
+        default['bidirectional'] = False
     for arg in default:
         if arg not in param_grid:
             param_grid[arg] = default[arg]
@@ -205,17 +219,19 @@ def perform_hyperparameter_search(param_grid, train_array, added_feature=None, e
     
     eid = 0 # experiment id
     for params in grid:
-        print(params)
+        print('eid {}, params {}'.format(eid, params))
         # Index of the model, represents the parameters
         index = '; '.join(x + '_' + str(y) for x, y in params.items())
         
         # Launch an experiment using the current set of parameters
         result = launch_experiment(eid,
                                    train_array,
-                                   cv,
                                    params,
-                                   added_feature,
-                                   early_stop=early_stop)
+                                   added_feature=added_feature,
+                                   rnn=rnn,
+                                   save_weights=save_weights,
+                                   early_stop=early_stop,
+                                   n_splits=n_splits)
         eid += 1
         
         # Store the correlation results
