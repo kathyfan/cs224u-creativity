@@ -101,7 +101,7 @@ def evaluate(model, iterator, criterion, debug=False, added_feature=None):
 # This function evaluates a model with a certain set of parameters
 # Returns validation correlations (list with a score for each split)
 # Optionally saves the weights of the best model from this experiment.
-def launch_experiment(eid, train_data_df, n_splits, params, added_feature, save_weights=False):
+def launch_experiment(eid, train_data_df, n_splits, params, added_feature=None, save_weights=False):
     valid_corrs = np.empty(n_splits)
     best_valid_loss = float('inf') 
     filename = eid + "_best_valid_loss.pt"
@@ -131,7 +131,7 @@ def launch_experiment(eid, train_data_df, n_splits, params, added_feature, save_
 
         train_iterator, valid_iterator = get_iterators(train_data, valid_data, params['batch_size'], device)
 
-        for epoch in range(params['n_epoch']):
+        for epoch in range(params['n_epochs']):
             start_time = time.time()
             train_loss, train_corr = train(model, train_iterator, optimizer, criterion, added_feature=added_feature)
             valid_loss, valid_corr = evaluate(model, valid_iterator, criterion, added_feature=added_feature)
@@ -153,6 +153,7 @@ def launch_experiment(eid, train_data_df, n_splits, params, added_feature, save_
         fold += 1
     return valid_corrs
 
+# TODO: return best params
 # Takes a parameter grid and search for the best model using all combinations of parameters
 # The param_grid is a dictionary like the input for sklearn.model_selection.GridSearchCV
 # Example: {'batch_size': [1,8], 'lr': [5e-05, 1e-05]}
@@ -167,7 +168,7 @@ def perform_hyperparameter_search(param_grid, added_feature=None, cv=constants.N
     default = {'dropout': [.2], 
               'batch_size': [8],
                'lr': [5e-05],
-              'n_epoch': [3]}
+              'n_epochs': [3]}
     for argum in default:
         if argum not in param_grid:
             param_grid[argum] = default[argum]
