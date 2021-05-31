@@ -103,7 +103,7 @@ def evaluate(model, iterator, criterion, debug=False, added_feature=None):
 # This function evaluates a model with a certain set of parameters
 # Returns validation correlations (list with a score for each split)
 # Optionally saves the weights of the best model from this experiment.
-def launch_experiment(eid, train_array, n_splits, params, added_feature=None, save_weights=False):
+def launch_experiment(eid, train_array, n_splits, params, added_feature=None, save_weights=False, early_stop=True):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     criterion = nn.MSELoss(size_average=False)
     criterion = criterion.to(device)
@@ -138,7 +138,8 @@ def launch_experiment(eid, train_array, n_splits, params, added_feature=None, sa
 
         train_iterator, valid_iterator = get_iterators(train_data, valid_data, params['batch_size'], device)
 
-        for epoch in range(params['n_epochs']):
+        prev_train_loss = 0.1 # set to a small non-zero value
+        for epoch in range(params['max_epochs']):
             start_time = time.time()
             train_loss, train_corr = train(model, train_iterator, optimizer, criterion, added_feature=added_feature)
             valid_loss, valid_corr = evaluate(model, valid_iterator, criterion, added_feature=added_feature)
@@ -151,7 +152,17 @@ def launch_experiment(eid, train_array, n_splits, params, added_feature=None, sa
                     # Save the weights of the model with the best valid loss
                     print('updating saved weights of best model')
                     torch.save(model.state_dict(), filename)
-
+                    
+            if early_stop:
+                # evaluate whether we should stop training this fold
+                loss_delta = abs(train_loss - prev_train_loss)
+                # currently setting the stop criteria as loss changing <10% from the previous epoch
+                if loss_delta / prev_train_loss < 0.1:
+                    # no need to update prev_train_loss since we are jumping out of loop
+                    break
+            
+            prev_train_loss = train_loss
+            
             print(f'Epoch: {epoch:02} | Epoch Time: {epoch_mins}m {epoch_secs}s')
             print(f'\t Train Loss: {train_loss:.3f} | Train Corr: {train_corr:.2f}')
             print(f'\t Val. Loss: {valid_loss:.3f} |  Val. Corr: {valid_corr:.2f}')
@@ -170,16 +181,16 @@ def launch_experiment(eid, train_array, n_splits, params, added_feature=None, sa
 # The function returns the performance of all models (k-element lists stored in dictionaries)
 # These results can be used for model comparison (e.g., Wilcoxin test)
 # and the best model (a tuple with the parameters and the average correlation)
-def perform_hyperparameter_search(param_grid, train_array, added_feature=None, cv=constants.N_SPLITS):
+def perform_hyperparameter_search(param_grid, train_array, added_feature=None, early_stop=True, cv=constants.N_SPLITS):
     
     # Set default arguments. If the argument is not given in the parameter grid, the default will be used
     default = {'dropout': [.2], 
               'batch_size': [8],
                'lr': [5e-05],
-              'n_epochs': [3]}
-    for argum in default:
-        if argum not in param_grid:
-            param_grid[argum] = default[argum]
+              'max_epochs': [3]}
+    for arg in default:
+        if arg not in param_grid:
+            param_grid[arg] = default[arg]
     
     # Use this function to expand the parameter grid
     grid = ParameterGrid(param_grid)
@@ -199,7 +210,8 @@ def perform_hyperparameter_search(param_grid, train_array, added_feature=None, c
                                    train_array,
                                    cv,
                                    params,
-                                   added_feature)
+                                   added_feature,
+                                   early_stop=early_stop)
         eid += 1
         
         # Store the correlation results
