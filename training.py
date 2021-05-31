@@ -156,8 +156,12 @@ def launch_experiment(eid, train_array, n_splits, params, added_feature=None, sa
             if early_stop:
                 # evaluate whether we should stop training this fold
                 loss_delta = abs(train_loss - prev_train_loss)
-                # currently setting the stop criteria as loss changing <10% from the previous epoch
-                if loss_delta / prev_train_loss < 0.1:
+                # stop criteria: 
+                # loss changing <10% from the previous epoch
+                # or, validation correlation less than train correlation by more than 0.3.
+                # the second criteria suggests the gap is large between train/valid results
+                # meaning we could be overfitting if we continue.
+                if loss_delta / prev_train_loss < 0.1 || train_corr - valid_corr > 0.3:
                     # no need to update prev_train_loss since we are jumping out of loop
                     break
             
