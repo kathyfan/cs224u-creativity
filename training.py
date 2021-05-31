@@ -1,8 +1,10 @@
 import constants # constants.py
 import models # models.py
-import utils # utils.py
+import dataset # dataset.py
 import numpy as np
+import time
 import torch
+import torch.nn as nn
 import torch.optim as optim
 from torchtext.legacy import data 
 from transformers import DistilBertModel
@@ -101,10 +103,14 @@ def evaluate(model, iterator, criterion, debug=False, added_feature=None):
 # This function evaluates a model with a certain set of parameters
 # Returns validation correlations (list with a score for each split)
 # Optionally saves the weights of the best model from this experiment.
-def launch_experiment(eid, train_data_df, n_splits, params, added_feature=None, save_weights=False):
+def launch_experiment(eid, train_array, n_splits, params, added_feature=None, save_weights=False):
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    criterion = nn.MSELoss(size_average=False)
+    criterion = criterion.to(device)
+
     valid_corrs = np.empty(n_splits)
     best_valid_loss = float('inf') 
-    filename = eid + "_best_valid_loss.pt"
+    filename = str(eid) + "_best_valid_loss.pt"
     
     added_dim = 0
     if added_feature is not None:
@@ -112,11 +118,12 @@ def launch_experiment(eid, train_data_df, n_splits, params, added_feature=None, 
         added_features = added_feature.to(device)
     kf = KFold(n_splits=n_splits)
     fold = 0
+    all_fields = dataset.get_all_fields()
     
-    for train_index, valid_index in kf.split(train_data_df):
+    for train_index, valid_index in kf.split(train_array):
         print('training on fold {}'.format(fold))
-        train_data = data.Dataset(train_exs_arr[train_index], all_fields)
-        valid_data = data.Dataset(train_exs_arr[valid_index], all_fields)
+        train_data = data.Dataset(train_array[train_index], all_fields)
+        valid_data = data.Dataset(train_array[valid_index], all_fields)
     
         # Initialize a new model each fold.
         # https://ai.stackexchange.com/questions/18221/deep-learning-with-kfold-cross-validation-with-epochs
@@ -140,10 +147,10 @@ def launch_experiment(eid, train_data_df, n_splits, params, added_feature=None, 
             
             if save_weights:
                 if valid_loss < best_valid_loss:
-                best_valid_loss = valid_loss
-                # Save the weights of the model with the best valid loss
-                print('updating saved weights of best model')
-                torch.save(model.state_dict(), filename)
+                    best_valid_loss = valid_loss
+                    # Save the weights of the model with the best valid loss
+                    print('updating saved weights of best model')
+                    torch.save(model.state_dict(), filename)
 
             print(f'Epoch: {epoch:02} | Epoch Time: {epoch_mins}m {epoch_secs}s')
             print(f'\t Train Loss: {train_loss:.3f} | Train Corr: {train_corr:.2f}')
@@ -157,12 +164,13 @@ def launch_experiment(eid, train_data_df, n_splits, params, added_feature=None, 
 # Takes a parameter grid and search for the best model using all combinations of parameters
 # The param_grid is a dictionary like the input for sklearn.model_selection.GridSearchCV
 # Example: {'batch_size': [1,8], 'lr': [5e-05, 1e-05]}
+# train_array should be a numpy array containing the training examples
 # Each model will be evaluated using k-fold (default = 5) cross validations
 # The model with the highest average correlations across all folds will be selected as the best model
 # The function returns the performance of all models (k-element lists stored in dictionaries)
 # These results can be used for model comparison (e.g., Wilcoxin test)
 # and the best model (a tuple with the parameters and the average correlation)
-def perform_hyperparameter_search(param_grid, added_feature=None, cv=constants.N_SPLITS):
+def perform_hyperparameter_search(param_grid, train_array, added_feature=None, cv=constants.N_SPLITS):
     
     # Set default arguments. If the argument is not given in the parameter grid, the default will be used
     default = {'dropout': [.2], 
@@ -188,8 +196,8 @@ def perform_hyperparameter_search(param_grid, added_feature=None, cv=constants.N
         
         # Launch an experiment using the current set of parameters
         result = launch_experiment(eid,
-                                   train_data_df=train_exs_arr,
-                                   n_splits=cv,
+                                   train_array,
+                                   cv,
                                    params,
                                    added_feature)
         eid += 1
