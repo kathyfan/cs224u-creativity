@@ -64,8 +64,8 @@ def get_all_fields():
     return [('text', get_text_fields()), ('label', get_label_fields())]
 
 # Returns train_dataset, test_dataset
-def get_train_test_datasets():
+def get_train_test_datasets(train_file, test_file):
     return data.TabularDataset.splits(
         path='', # path='' because the csvs are in the same directory
-        train='ktrain.csv', test='ktest.csv', format='csv',
+        train=train_file, test=test_file, format='csv',
         fields=get_all_fields())
