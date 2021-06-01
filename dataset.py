@@ -20,7 +20,7 @@ def read_data(study, metric, shuffle=True):
 # Take a list with the numbers of studies, and a specific metric
 # Extract multiple datasets with get_data and concatenate them
 def read_multiple_datasets(study_list, metric, shuffle = True):
-    dfs = [get_data(study, metric, shuffle) for study in study_list]
+    dfs = [read_data(study, metric, shuffle) for study in study_list]
     return pd.concat(dfs)
 
 def get_tokenizer():
