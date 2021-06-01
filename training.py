@@ -214,7 +214,7 @@ def perform_hyperparameter_search(param_grid, train_array, rnn=False, added_feat
         default['hidden_dim'] = 256
         default['num_layers'] = 1
         default['bidirectional'] = False
-        default['model': 'rnn']
+        default['model'] = ['rnn']
     for arg in default:
         if arg not in param_grid:
             param_grid[arg] = default[arg]
