@@ -105,7 +105,7 @@ def evaluate(model, iterator, criterion, debug=False, added_feature=None):
 # Returns validation correlations (list with a score for each split)
 # Use `rnn` to toggle between BERTLinear and BERTRNN.
 # Optionally saves the weights of the best model from this experiment.
-def launch_experiment(eid, train_array, params, added_feature=None, rnn=False, save_weights=False, early_stop=True, n_splits=constants.N_SPLITS):
+def launch_experiment(eid, train_array, params, added_feature=None, save_weights=False, early_stop=True, n_splits=constants.N_SPLITS):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     criterion = nn.MSELoss(size_average=False)
     criterion = criterion.to(device)
@@ -131,18 +131,25 @@ def launch_experiment(eid, train_array, params, added_feature=None, rnn=False, s
         # https://ai.stackexchange.com/questions/18221/deep-learning-with-kfold-cross-validation-with-epochs
         # https://stats.stackexchange.com/questions/358380/neural-networks-epochs-with-10-fold-cross-validation-doing-something-wrong
         bert = DistilBertModel.from_pretrained(constants.WEIGHTS_NAME)
-        if rnn:
+        if params['model'] == 'rnn':
             model = models.BERTRNN(bert,
                                    constants.OUTPUT_DIM,
                                    params['hidden_dim'],
                                    params['num_layers'],
                                    params['bidirectional'],
                                    params['dropout'])
-        else:
+        elif params['model'] == 'linear':
             model = models.BERTLinear(bert,
                                       constants.OUTPUT_DIM,
                                       params['dropout'],
                                       added_dim = added_dim)
+        elif params['model'] == 'linear_mean':
+            model = models.BERTMeanLinear(bert,
+                                      constants.OUTPUT_DIM,
+                                      params['dropout'],
+                                      added_dim = added_dim)
+        else:
+            print('invalid model given; code will abort')
         optimizer = optim.Adam(model.parameters(),lr=params['lr'],betas=(0.9, 0.999),eps=1e-08)
         model = model.to(device)
 
@@ -201,11 +208,13 @@ def perform_hyperparameter_search(param_grid, train_array, rnn=False, added_feat
     default = {'dropout': [.2], 
               'batch_size': [8],
               'lr': [5e-05],
-              'max_epochs': [3]}
+              'max_epochs': [3],
+              'model': 'linear'}
     if rnn:
         default['hidden_dim'] = 256
         default['num_layers'] = 1
         default['bidirectional'] = False
+        default['model': 'rnn']
     for arg in default:
         if arg not in param_grid:
             param_grid[arg] = default[arg]
@@ -228,7 +237,6 @@ def perform_hyperparameter_search(param_grid, train_array, rnn=False, added_feat
                                    train_array,
                                    params,
                                    added_feature=added_feature,
-                                   rnn=rnn,
                                    save_weights=save_weights,
                                    early_stop=early_stop,
                                    n_splits=n_splits)

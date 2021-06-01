@@ -38,6 +38,35 @@ class BERTLinear(nn.Module):
     output = self.classifier(pooled_output) # [4, 1] = (bs, output_dim)
     return output
 
+class BERTMeanLinear(nn.Module):
+  def __init__(self,
+               bert,
+               output_dim,
+               dropout,
+               # Manually add features to BERT output,
+               added_dim = 0):
+    super().__init__()
+    self.bert = bert
+    # Add the dimension of extra features
+    dim = bert.config.to_dict()['dim'] + added_dim # embedding dim of BERT
+    self.pre_classifier = nn.Linear(dim, dim)
+    self.dropout = nn.Dropout(dropout)
+    self.classifier = nn.Linear(dim, output_dim)
+    self.added_dim =added_dim
+
+  def forward(self, text, added_features=None):
+    # forward pass of bert; then take the mean of output tokens
+    embedded = self.bert(text)[0] # [4, 425, 768] = (bs, seq_len, dim)
+    pooled_output = torch.mean(embedded,1) # [4, 768] = (bs, dim)
+    if added_features is not None:
+        assert added_features.shape[1] == self.added_dim
+        pooled_output = torch.cat((pooled_output, added_features), 1)
+    pooled_output = self.pre_classifier(pooled_output) # [4, 768] = (bs, dim)
+    pooled_output = nn.ReLU()(pooled_output) # [4, 768] = (bs, dim)
+    pooled_output = self.dropout(pooled_output) # [4, 768] = (bs, dim)
+    output = self.classifier(pooled_output) # [4, 1] = (bs, output_dim)
+    return output
+
 # This class uses a RNN classifier on top of BERT embeddings.
 # TODO: support added features.
 class BERTRNN(nn.Module):
