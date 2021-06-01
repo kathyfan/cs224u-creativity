@@ -30,6 +30,8 @@ class BERTLinear(nn.Module):
     embedded = self.bert(text)[0] # [4, 425, 768] = (bs, seq_len, dim)
     pooled_output = embedded[:,0] # [4, 768] = (bs, dim)
     if added_features is not None:
+        if self.added_dim == 1:
+            added_features = added_features.unsqueeze(1)
         assert added_features.shape[1] == self.added_dim
         pooled_output = torch.cat((pooled_output, added_features), 1)
     pooled_output = self.pre_classifier(pooled_output) # [4, 768] = (bs, dim)

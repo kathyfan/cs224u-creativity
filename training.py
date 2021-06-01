@@ -40,16 +40,19 @@ def get_iterator(test_data, batch_size, device):
         sort_within_batch = False,
     )
 
-def train(model, iterator, optimizer, criterion, added_feature=None):
+def train(model, iterator, optimizer, criterion, added_feature=None, add = False):
     epoch_loss = 0
     epoch_pred = []
     epoch_true = []
     
     model.train() # Put model in training mode.
-
     for batch in iterator:
         optimizer.zero_grad()
-        predictions = model(batch.text,added_feature).squeeze(1)
+        
+        if add:
+            predictions = model(batch.text,added_features = batch.add).squeeze(1)
+        else:
+            predictions = model(batch.text).squeeze(1)
         loss = criterion(predictions, batch.label)
         # need to use detach() since `predictions` requires gradient
         # alternative: scipy.stats.pearsonr? (might be more memory efficient,
@@ -70,7 +73,7 @@ def train(model, iterator, optimizer, criterion, added_feature=None):
 
 # Evaluate the model on a validation or test set.
 # Use debug=True to print more detailed info.
-def evaluate(model, iterator, criterion, debug=False, added_feature=None):
+def evaluate(model, iterator, criterion, debug=False, added_feature=None, add = False):
     epoch_loss = 0
 
     model.eval()
@@ -82,7 +85,10 @@ def evaluate(model, iterator, criterion, debug=False, added_feature=None):
         for batch in iterator:
             # print(i)
             # i += 1
-            predictions = model(batch.text,added_feature).squeeze(1)
+            if add:
+                predictions = model(batch.text,added_features = batch.add).squeeze(1)
+            else:
+                predictions = model(batch.text).squeeze(1)
             if debug:
                 print('predictions: {}'.format(predictions)) 
                 print('true labels: {}'.format(batch.label))
@@ -105,7 +111,7 @@ def evaluate(model, iterator, criterion, debug=False, added_feature=None):
 # Returns validation correlations (list with a score for each split)
 # Use `rnn` to toggle between BERTLinear and BERTRNN.
 # Optionally saves the weights of the best model from this experiment.
-def launch_experiment(eid, train_array, params, added_feature=None, save_weights=False, early_stop=True, n_splits=constants.N_SPLITS):
+def launch_experiment(eid, train_array, params, added_feature=None, save_weights=False, early_stop=True, n_splits=constants.N_SPLITS, add = False):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     criterion = nn.MSELoss(size_average=False)
     criterion = criterion.to(device)
@@ -115,12 +121,15 @@ def launch_experiment(eid, train_array, params, added_feature=None, save_weights
     filename = str(eid) + "_best_valid_loss.pt"
     
     added_dim = 0
-    if added_feature is not None:
-        added_dim = added_feature.shape[1]
-        added_features = added_feature.to(device)
+#     if added_feature is not None:
+#         added_dim = added_feature.shape[1]
+#         added_features = added_feature.to(device)
+    if add:
+        added_dim = 1
+        
     kf = KFold(n_splits=n_splits)
     fold = 0
-    all_fields = dataset.get_all_fields()
+    all_fields = dataset.get_all_fields(add)
     
     for train_index, valid_index in kf.split(train_array):
         print('training on fold {}'.format(fold))
@@ -158,8 +167,8 @@ def launch_experiment(eid, train_array, params, added_feature=None, save_weights
         prev_train_loss = 0.1 # set to a small non-zero value
         for epoch in range(params['max_epochs']):
             start_time = time.time()
-            train_loss, train_corr = train(model, train_iterator, optimizer, criterion, added_feature=added_feature)
-            valid_loss, valid_corr = evaluate(model, valid_iterator, criterion, added_feature=added_feature)
+            train_loss, train_corr = train(model, train_iterator, optimizer, criterion, added_feature=added_feature, add = add)
+            valid_loss, valid_corr = evaluate(model, valid_iterator, criterion, added_feature=added_feature, add = add)
             end_time = time.time()
             epoch_mins, epoch_secs = utils.epoch_time(start_time, end_time)
             

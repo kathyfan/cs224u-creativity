@@ -53,19 +53,29 @@ def get_text_fields():
                   pad_token = tokenizer.pad_token_id,
                   unk_token = tokenizer.unk_token_id)
 
+
 # label_fields defines how to handle the label of an example.
 # for regression, we do not need to build a vocabulary.
 def get_label_fields():
     return data.LabelField(sequential=False, use_vocab=False, dtype = torch.float)
+    
 
 # Returns list containing text_fields and label_fields
 # Assumes csv data has columns in order of [text, label] 
-def get_all_fields():
-    return [('text', get_text_fields()), ('label', get_label_fields())]
+# If the data has a column for added feature named "add", create a field for it.
+def get_all_fields(add= False):
+    if add:
+        ADD = data.Field(use_vocab = False,
+                        dtype = torch.float,
+                        sequential=False,
+                        batch_first = True)
+        return [('text', get_text_fields()), ('label', get_label_fields()), ('add', ADD)]
+    else:
+        return [('text', get_text_fields()), ('label', get_label_fields())]
 
 # Returns train_dataset, test_dataset
-def get_train_test_datasets(train_file, test_file):
+def get_train_test_datasets(train_file, test_file, add=False):
     return data.TabularDataset.splits(
         path='', # path='' because the csvs are in the same directory
         train=train_file, test=test_file, format='csv',
-        fields=get_all_fields())
+        fields=get_all_fields(add=add))
