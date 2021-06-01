@@ -211,7 +211,7 @@ def launch_experiment(eid, train_array, params, added_feature=None, save_weights
 # The function returns the performance of all models (k-element lists stored in dictionaries)
 # These results can be used for model comparison (e.g., Wilcoxin test)
 # and the best model (a tuple with the parameters and the average correlation)
-def perform_hyperparameter_search(param_grid, train_array, rnn=False, added_feature=None, save_weights=False, early_stop=True, n_splits=constants.N_SPLITS):
+def perform_hyperparameter_search(param_grid, train_array, rnn=False, added_feature=None, add = False, save_weights=False, early_stop=True, n_splits=constants.N_SPLITS):
     
     # Set default arguments. If the argument is not given in the parameter grid, the default will be used
     default = {'dropout': [.2], 
@@ -246,6 +246,7 @@ def perform_hyperparameter_search(param_grid, train_array, rnn=False, added_feat
                                    train_array,
                                    params,
                                    added_feature=added_feature,
+                                   add = add,
                                    save_weights=save_weights,
                                    early_stop=early_stop,
                                    n_splits=n_splits)
