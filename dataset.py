@@ -19,9 +19,12 @@ def read_data(study, metric, shuffle=True):
 
 # Take a list with the numbers of studies, and a specific metric
 # Extract multiple datasets with get_data and concatenate them
-def read_multiple_datasets(study_list, metric, shuffle = True):
+def read_multiple_datasets(study_list, metric, shuffle=True):
     dfs = [read_data(study, metric, shuffle) for study in study_list]
-    return pd.concat(dfs)
+    dfs_all = pd.concat(dfs)
+    if shuffle:
+        dfs_all = dfs_all.sample(frac=1)
+    return dfs_all
 
 def get_tokenizer():
     return DistilBertTokenizer.from_pretrained(constants.WEIGHTS_NAME)
