@@ -4,3 +4,5 @@ glove.6B/glove.6B.200d.txt
 glove.6B/glove.6B.300d.txt
 glove.6B/glove.6B.50d.txt
 1_best_valid_loss.pt
+Distilbert_linear_regression.ipynb
+.DS_Store
