@@ -4,6 +4,22 @@ Course project for CS224U
 
 Project members: Zi Ying (Kathy) Fan, Xubo Cao
 
+# User Guide
+## Main files of interest
+Our raw data is in Idea Ratings_Berg_2019_OBHDP.xlsx.
+
+Our code is mainly found across the python files:
+* dataset.py
+* models.py
+* training.py
+* utils.py
+* constants.py
+* semdis.py
+
+We also have python notebooks that demonstrate how to use this code in a full pipeline, from data processing to training and testing. The main notebooks of interest are:
+* Distilbert_linear_regression.ipynb contains an example for how to run our linear classifier.
+* Distilbert_rnn.ipynb contains an example for how to run our rnn classifier.
+
 # Dev Guide
 ## Troubleshooting
 GPU run out of memory: run `nvidia-smi` to get the PID of the current job, and run `sudo kill -9 {PID}` to clear it.
