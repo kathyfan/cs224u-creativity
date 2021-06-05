@@ -19,6 +19,8 @@ Our code is mainly found across the python files:
 We also have python notebooks that demonstrate how to use this code in a full pipeline, from data processing to training and testing. The main notebooks of interest are:
 * Distilbert_linear_regression.ipynb contains an example for how to run our linear classifier.
 * Distilbert_rnn.ipynb contains an example for how to run our rnn classifier.
+* Feature_masking contains our feature masking experiments.
+* Semantic_distance.ipynb implements the semantic distance baseline model.
 
 # Dev Guide
 ## Troubleshooting
